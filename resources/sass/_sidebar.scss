@@ -1,0 +1,17 @@
+$sidebar_width: 250px;
+
+#page-wrapper {
+    height: 100%;
+    width: 100%;
+    overflow-y: initial;
+    padding-left: $sidebar_width;
+}
+
+
+.sidebar {
+  width: $sidebar_width;
+  height: 100%;
+  position: fixed;
+  left: 0;
+  z-index: 10;
+}

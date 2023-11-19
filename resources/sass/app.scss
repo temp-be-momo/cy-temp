@@ -1,0 +1,62 @@
+// Fonts
+// https://cylab.be/blog/159/laravel-optimization-self-hosted-fonts
+// @import url('https://fonts.googleapis.com/css?family=Nunito');
+@import "@fontsource/nunito";
+@import "~@fontsource/nunito/500.css";
+
+// Variables
+@import 'variables';
+
+// Bootstrap
+@import '~bootstrap/scss/bootstrap';
+
+// Font awesome
+@import '~@fortawesome/fontawesome-free/css/all.css';
+
+@import 'sidebar';
+
+// --- dropzone for images upload
+@import '~dropzone/src/dropzone.scss';
+.dz-preview {
+    margin: 16px 0 !important;
+    width: 100%;
+}
+
+.dz-image {
+    width: 100% !important;
+}
+
+.dz-filename {
+    position: relative;
+    top: 18px;
+}
+
+@import 'toastr';
+
+// lightbox effect
+// to use: <a href='xxx.jpg' rel='lightbox'><img src='thumbnail.jpg'></a>
+@import "~lightbox2/dist/css/lightbox.min.css";
+
+
+// smooth scrolling
+// e.g. on jobs result page
+html {
+    scroll-behavior: smooth;
+}
+
+code#logs {
+    color: #212529;
+}
+
+// reload countdown
+div.bottom-right {
+    position: fixed;
+    bottom: 0;
+    right: 0;
+}
+
+// --- pagination
+ul.pagination {
+    justify-content: center !important;
+}
+

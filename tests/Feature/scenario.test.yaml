@@ -1,0 +1,45 @@
+#
+# VM's for the trainees (1 per participant)
+#
+machines:
+- name: trainee
+  image: alpine-3154
+  interfaces:
+  - mode: internal
+    network_name: intranet
+  remote_desktop: true
+
+#
+# VM's for teacher only
+#
+extra_machines:
+
+# router between the real network (bridge) and the
+# intranet network
+- name: router
+  image: alpine-3154
+  interfaces:
+  - mode: bridged
+    bridge_interface: DEFAULT
+  - mode: internal
+    network_name: intranet
+    address: 192.168.1.1
+    mask: 255.255.255.0
+  remote_desktop: true
+
+# web server, connected to the intranet
+# 192.168.1.10
+- name: srv01
+  image: alpine-3154
+  interfaces:
+  - mode: internal
+    network_name: dmz
+    address: 192.168.1.10
+    mask: 255.255.255.0
+    gateway: 192.168.1.1
+    dns-nameservers: 8.8.8.8
+  provision:
+  - sudo apk add apache2
+  - sudo rc-service apache2 start
+  - sudo rc-update add apache2
+  remote_desktop: true

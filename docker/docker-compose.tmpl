@@ -1,0 +1,100 @@
+#
+# cyrange-$CI_COMMIT_TAG
+# 
+
+version: "3"
+services:
+  cyrange:
+    image: cylab/cyrange:$CI_COMMIT_TAG
+    container_name: cyrange
+    depends_on:
+      - redis
+      - mysql
+    ports:
+      - 8080:80
+    volumes:
+      - ./volumes/cyrange:/var/www/html/storage
+      - ./images:/var/www/html/storage/app/images
+    env_file: cyrange.env
+    restart: "unless-stopped"
+    environment:
+      WAIT_HOSTS: mysql:3306, guacamole-mysql:3306
+
+  queue:
+    image: cylab/cyrange:$CI_COMMIT_TAG
+    container_name: queue
+    depends_on:
+      - cyrange
+    volumes:
+      - ./volumes/cyrange:/var/www/html/storage
+      - ./images:/var/www/html/storage/app/images
+    command: ["php", "artisan", "queue:work", "--verbose", "--tries=3", "--timeout=60"]
+    env_file: cyrange.env
+    restart: "unless-stopped"
+    environment:
+      WAIT_HOSTS: cyrange:80
+
+  scheduler:
+    image: cylab/cyrange:$CI_COMMIT_TAG
+    container_name: scheduler
+    depends_on:
+      - cyrange
+    volumes:
+      - ./volumes/cyrange:/var/www/html/storage
+    entrypoint: sh -c "while true; do php /var/www/html/artisan schedule:run --verbose & sleep 60; done"
+    env_file: cyrange.env
+    restart: "unless-stopped"
+    environment:
+      WAIT_HOSTS: cyrange:80
+
+  redis:
+    image: redis:4-alpine
+    container_name: redis
+    volumes:
+      - ./volumes/redis:/data
+    restart: "unless-stopped"
+
+  mysql:
+    image: mysql:5.7
+    container_name: mysql
+    volumes:
+      - ./volumes/mysql:/var/lib/mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: cyrange
+    restart: "unless-stopped"
+
+  guacd:
+    image: guacamole/guacd:1.3.0
+    container_name: guacd
+    restart: "unless-stopped"
+
+  guacamole:
+    image: guacamole/guacamole:1.3.0
+    container_name: guacamole
+    depends_on:
+      - guacd
+      - guacamole-mysql
+    environment:
+      GUACD_HOSTNAME: guacd
+      MYSQL_HOSTNAME: guacamole-mysql
+      MYSQL_USER: root
+      MYSQL_PASSWORD: root
+      MYSQL_DATABASE: guacamole
+    ports:
+      - 8081:8080
+    restart: "unless-stopped"
+
+  guacamole-mysql:
+    image: mysql:5.7
+    container_name: guacamole-mysql
+    volumes:
+      # to create the mysql tables when the container is created
+      # https://iamvickyav.medium.com/mysql-init-script-on-docker-compose-e53677102e48
+      - ./001-create-schema.sql:/docker-entrypoint-initdb.d/001.sql
+      - ./volumes/guacamole-mysql:/var/lib/mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: guacamole
+    restart: "unless-stopped"
+

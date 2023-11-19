@@ -1,0 +1,118 @@
+## Cache composer packages between all jobs and all branches
+## of this project...
+cache:
+  key: one-key-to-rull-them-all
+  paths:
+    - composer-cache/
+
+stages:
+  - test
+  - release
+  - deploy
+
+# static tests
+test:static:
+  stage: test
+  image: cylab/php74
+  before_script:
+    # Install project dependencies
+    - COMPOSER_CACHE_DIR=./composer-cache composer install
+  script:
+    - vendor/bin/phpcs
+    - vendor/bin/phpstan analyze --memory-limit 512000000
+    - vendor/bin/security-checker security:check
+    - vendor/bin/unused_scanner unused-scanner.php
+
+test:phpunit:
+  stage: test
+  tags:
+    - vbox
+  before_script:
+    - cp .env.gitlab .env
+    - mkdir -p storage/framework/cache storage/framework/sessions storage/framework/views storage/app/images
+    # Install project dependencies
+    - COMPOSER_CACHE_DIR=./composer-cache composer install
+  script:
+    - vendor/bin/phpunit --coverage-text --colors=never --coverage-html=target/coverage --testdox
+  artifacts:
+    when: always
+    paths:
+      - target
+      - storage/app/deploys
+      - storage/logs
+
+build:
+  image: docker:stable-git
+  services:
+    - docker:stable-dind
+  ## Run on a gitlab-runner that is configured with docker-in-docker
+  tags:
+    - dind
+  stage: test
+  script:
+    # Login, build and push Docker image
+    - docker login -u "$CI_REGISTRY_USER" -p "$CI_REGISTRY_PASSWORD" "$CI_REGISTRY"
+    - docker build -t "$CI_REGISTRY_IMAGE:$CI_COMMIT_SHA" -t "$CI_REGISTRY_IMAGE:latest" .
+    - docker push "$CI_REGISTRY_IMAGE:$CI_COMMIT_SHA"
+    - docker push "$CI_REGISTRY_IMAGE:latest"
+
+
+release:
+  only:
+    - tags
+  image: docker:stable-git
+  services:
+    - docker:stable-dind
+  ## Run on a gitlab-runner that is configured with docker-in-docker
+  tags:
+    - dind
+  stage: release
+  script:
+    - apk add gettext
+    - envsubst < manifest.tmpl > app/manifest.json
+    - docker build -t cylab/cyrange:$CI_COMMIT_TAG -t cylab/cyrange:latest .
+    - docker login -u $DOCKER_USERNAME -p $DOCKER_PASSWORD
+    - docker push cylab/cyrange:$CI_COMMIT_TAG
+    - docker push cylab/cyrange:latest
+
+#
+# publish docker-compose.yml and app.json
+# 
+publish:
+  only:
+    - tags
+  stage: release
+  image: alpine
+  artifacts:
+    paths:
+      - docker-compose.yml
+      - app.json
+  script:
+    - apk add curl gettext zip
+    # use template to create the release docker-compose and app.json
+    - envsubst < docker/docker-compose.tmpl > docker-compose.yml
+    - envsubst < app.json.tmpl > app.json
+    # create zip
+    - zip cyrange.zip -j docker-compose.yml docker/cyrange.env 001-create-schema.sql
+    # upload to artifacts.cylab.be
+    - "curl https://artifacts.cylab.be/api/cyrange-web/$CI_COMMIT_TAG/cyrange.zip --request POST --header \"Authorization: Bearer $UPLOAD_TOKEN\" -F \"file=@./cyrange.zip\""
+    - "curl https://artifacts.cylab.be/api/cyrange-web/latest/cyrange.zip --request POST --header \"Authorization: Bearer $UPLOAD_TOKEN\" -F \"file=@./cyrange.zip\""
+    - "curl https://artifacts.cylab.be/api/cyrange-web/app.json --request POST --header \"Authorization: Bearer $UPLOAD_TOKEN\" -F \"file=@./app.json\""
+
+deploy:
+  only:
+    - tags
+  image: cylab/php74
+  stage: deploy
+  environment:
+    name: cyrange.cylab.be
+    url: https://cyrange.cylab.be
+  script:
+    # import ssh private key
+    - eval $(ssh-agent -s)
+    - ssh-add <(echo "$SSH_PRIVATE_KEY")
+    - mkdir -p ~/.ssh
+    - echo -e "Host *\n\tStrictHostKeyChecking no\n\n" > ~/.ssh/config
+    # in cylab/php74, envoy is already installed...
+    - ~/.composer/vendor/bin/envoy run deploy
+
